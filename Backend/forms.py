@@ -2,7 +2,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, PasswordField, SelectField, SubmitField, DateTimeField, IntegerField
 from wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError
 from datetime import datetime
-from models import UserRole, ProjectRole, TaskPriority, TaskCategory, TaskStatus, Color
+from models import ProjectRole, TaskPriority, TaskCategory, TaskStatus, Color
 
 def validate_deadline(form, field):
     if field.data and field.data < datetime.now():

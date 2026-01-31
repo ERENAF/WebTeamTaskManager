@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Project, User, project_users
+from models import db, Project, User, project_members
 from schemas import project_schema, projects_schema, project_member_schema
 from sqlalchemy import text
 
