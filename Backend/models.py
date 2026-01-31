@@ -9,7 +9,7 @@ class UserRole(Enum):
 
 class ProjectRole(Enum):
     OWNER = "Owner"
-    EDITOR = "EDITOR"
+    EDITOR = "Editor"
     VIEWER = "Viewer"
 
 class TaskPriority(Enum):
