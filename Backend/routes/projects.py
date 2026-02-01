@@ -206,6 +206,77 @@ def add_project_member(project_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@projects_bp.route('/<int:project_id>/members/<int:user_id>',methods = ['PUT'])
+@jwt_required()
+def update_project_member_role(project_id,user_id):
+    try:
+        current_user_id = get_jwt_identity()
+
+        role = get_current_user_role_in_project(project_id, current_user_id)
+
+        if role != 'Owner':
+            return jsonify({"error":"Требуются права Владельца"})
+
+        project = Project.query.get(project_id)
+        if not project:
+            return jsonify({"error":"Проект не найден!"}),404
+
+        targer_user = User.query.get(user_id)
+        if not targer_user:
+            return jsonify({"error":"Пользователь не найден"}),404
+
+        if project.owner == user_id:
+            return jsonify({"error":"Нельзя изменить роль владельца проекта"}),403
+
+        stmt = text("""
+            SELECT role FROM project_users
+            WHERE project_id = :project_id AND user_id = :user_id
+        """)
+        existing_role = db.session.execute(stmt, {
+            'project_id': project_id,
+            'user_id': user_id
+        }).fetchone()
+
+        if not existing_role:
+            return jsonify({"error":"Пользователь не участник проекта!"}),404
+
+        data = request.get_json()
+        validated_data = project_member_schema.load(data)
+        new_role = validated_data['role']
+
+        valid_roles = ['Owner', 'EDITOR', 'VIEWER']
+        if new_role not in valid_roles:
+            return jsonify({"error": f"Некорректная роль. Допустимые: {', '.join(valid_roles)}"}), 400
+
+        if new_role == 'Owner':
+            return jsonify({"error": "Роль Owner может быть только у создателя проекта"}), 403
+
+        update_stmt = text("""
+            UPDATE project_users
+            SET role = :new_role
+            WHERE project_id = :project_id AND user_id = :user_id
+        """)
+        result = db.session.execute(update_stmt, {
+            'project_id': project_id,
+            'user_id': user_id,
+            'new_role': new_role
+        })
+
+        db.session.commit()
+
+        if result.rowcount == 0:
+            return jsonify({"error": "Не удалось обновить роль"}), 400
+
+        return jsonify({
+            "message": "Роль участника обновлена",
+            "user_id": user_id,
+            "old_role": existing_role[0],
+            "new_role": new_role
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 400
+
 @projects_bp.route('/<int:project_id>/members/<int:user_id>', methods=['DELETE'])
 @jwt_required()
 def remove_project_member(project_id, user_id):
