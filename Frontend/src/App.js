@@ -40,10 +40,11 @@ function App() {
         }
     };
 
-    const handleLoginSuccess = (userData, token) => {
-        localStorage.setItem('user', JSON.stringify(userData));
+    const handleLoginSuccess = (responseData) => {
+        const { user, token } = responseData;
+        localStorage.setItem('user', JSON.stringify(user));
         localStorage.setItem('token', token);
-        setUser(userData);
+        setUser(user);
         setCurrentPage('projects');
     };
 

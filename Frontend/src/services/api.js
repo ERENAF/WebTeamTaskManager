@@ -9,7 +9,7 @@ const api = axios.create({
     }
 });
 
-api.interceptors.request.use(config =>{
+api.interceptors.request.use((config) =>{
     const token = localStorage.getItem('token');
     if (token){
         config.headers.Authorization = `Bearer ${token}`;
@@ -18,8 +18,8 @@ api.interceptors.request.use(config =>{
 });
 
 api.interceptors.response.use(
-    response => response,
-    error =>{
+    (response) => response,
+    (error) =>{
         if (error.response && error.response.status == 401){
             localStorage.removeItem('token');
             localStorage.removeItem('user');
@@ -37,8 +37,14 @@ export const systemAPI = {
 };
 
 export const authAPI = {
-    register : (userData) => api.post(`/register`,userData),
-    login: (userData) => api.post(`/login`,userData)
+    register: async (userData) => {
+        const response = await api.post(`/register`, userData);
+        return response;
+    },
+    login: async (userData) => {
+        const response = await api.post(`/login`, userData);
+        return response;
+    }
 };
 
 export const usersAPI ={

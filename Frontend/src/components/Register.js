@@ -55,9 +55,8 @@ function Register({ onRegisterSuccess, onSwitchToLogin, enums }) {
             };
 
             const response = await authAPI.register(userData);
-            const { user, token } = response.data;
 
-            onRegisterSuccess(user, token);
+            onRegisterSuccess(response.data);
 
         } catch (err) {
             if (err.response) {

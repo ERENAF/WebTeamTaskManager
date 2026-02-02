@@ -16,9 +16,7 @@ function Login({ onLoginSuccess, onSwitchToRegister, enums }) {
         try {
             const response = await authAPI.login({ email, password });
 
-            const { user, token } = response.data;
-
-            onLoginSuccess(user, token);
+            onLoginSuccess(response.data);
 
         } catch (err) {
             if (err.response) {
