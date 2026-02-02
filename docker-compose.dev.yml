@@ -1,0 +1,26 @@
+version: '29.1.3'
+
+services:
+  backend:
+    build: ./Backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./Backend:/app
+    environment:
+      - FLASK_ENV=development
+      - DATABASE_URL=sqlite:////app/instance/dev.db
+      - SECRET_KEY=dev-secret-key-change-this
+
+  frontend:
+    build: ./Frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./Frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - REACT_APP_API_URL=http://localhost:5812
+    depends_on:
+      - backend

@@ -129,3 +129,21 @@ def init_db():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+
+@system_bp.route('/db-stats', methods=['GET'])
+def get_db_stats():
+    from models import User, Project, Task, Comment
+
+    stats = {
+        "users": User.query.count(),
+        "projects": Project.query.count(),
+        "tasks": Task.query.count(),
+        "comments": Comment.query.count(),
+        "tables": {
+            "user": [{"id": u.id, "username": u.username, "email": u.email} for u in User.query.all()],
+            "project": [{"id": p.id, "name": p.name, "owner": p.owner} for p in Project.query.all()],
+            "task": [{"id": t.id, "title": t.title, "status": t.status} for t in Task.query.all()],
+        }
+    }
+
+    return jsonify(stats), 200
