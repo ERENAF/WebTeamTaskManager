@@ -109,7 +109,7 @@ function TaskList({ projectId, user, userProjectRole, permissions }) {
                 taskData.deadline_date = new Date(taskForm.deadline_date).toISOString();
             }
 
-            if (userProjectRole === 'Owner' && taskForm.assignee_ids.length > 0) {
+            if (userProjectRole === 'Member' && taskForm.assignee_ids.length > 0) {
                 const validAssigneeIds = taskForm.assignee_ids.filter(assigneeId =>
                     projectMembers.some(member => (member.user_id || member.id) === assigneeId)
                 );
@@ -145,7 +145,7 @@ function TaskList({ projectId, user, userProjectRole, permissions }) {
 
     const handleDeleteTask = async (taskId, taskTitle) => {
         if (!permissions.canDeleteTasks) {
-            alert('Только владелец может удалять задачи');
+            alert('Только участники могут удалять задачи');
             return;
         }
 
@@ -479,7 +479,7 @@ function TaskList({ projectId, user, userProjectRole, permissions }) {
                                 </div>
                             </div>
 
-                            {userProjectRole === 'Owner' && projectMembers.length > 0 && (
+                            {userProjectRole === 'Member' && projectMembers.length > 0 && (
                                 <div className="form-group">
                                     <label>Ответственные (только участники проекта)</label>
                                     <div className="assignees-selector">
@@ -503,7 +503,7 @@ function TaskList({ projectId, user, userProjectRole, permissions }) {
                                                     <span className="assignee-info">
                                                         <span className="assignee-name">{memberName}</span>
                                                         <span className="assignee-role">
-                                                            ({memberRole === 'Owner' ? '👑 Владелец' : '👁️ Наблюдатель'})
+                                                            ({memberRole === 'Member' ? 'Участник' : 'Наблюдатель'})
                                                         </span>
                                                     </span>
                                                 </label>
@@ -516,7 +516,7 @@ function TaskList({ projectId, user, userProjectRole, permissions }) {
                                 </div>
                             )}
 
-                            {userProjectRole === 'Owner' && projectMembers.length === 0 && (
+                            {userProjectRole === 'Member' && projectMembers.length === 0 && (
                                 <div className="alert alert-warning">
                                     <p>⚠️ В проекте нет участников. Сначала добавьте участников, чтобы назначить ответственных.</p>
                                 </div>

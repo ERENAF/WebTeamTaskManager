@@ -8,7 +8,7 @@ class UserRole(Enum):
     CLIENT = "client"
 
 class ProjectRole(Enum):
-    OWNER = "Owner"
+    Member = "Member"
     VIEWER = "Viewer"
 
 class TaskPriority(Enum):

@@ -47,7 +47,7 @@ function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
         e.preventDefault();
 
         if (!permissions.canManageMembers) {
-            alert('Только владелец может добавлять участников');
+            alert('Только участники проекта могут добавлять участников');
             return;
         }
 
@@ -74,12 +74,12 @@ function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
 
     const handleRemoveMember = async (memberId, memberName) => {
         if (!permissions.canManageMembers) {
-            alert('Только владелец может удалять участников');
+            alert('Только участники могут удалять участников');
             return;
         }
 
         const member = members.find(m => (m.user_id || m.id) === memberId);
-        if (member && member.project_role === 'Owner') {
+        if (member && member.project_role === 'Member') {
             alert('Нельзя удалить владельца проекта');
             return;
         }
@@ -112,7 +112,7 @@ function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
 
     const roleOptions = [
         { value: 'Viewer', label: 'Наблюдатель', description: 'Может только просматривать проект и задачи' },
-        { value: 'Owner', label: 'Владелец', description: 'Полный доступ ко всем функциям проекта' }
+        { value: 'Member', label: 'Участник', description: 'Полный доступ ко всем функциям проекта' }
     ];
 
     const availableUsers = getAvailableUsers();
@@ -171,7 +171,7 @@ function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
                             {members.map((member, index) => {
                                 const memberId = member.user_id || member.id;
                                 const memberRole = member.project_role || member.role;
-                                const isOwner = memberRole === 'Owner';
+                                const isOwner = memberRole === 'Member';
                                 const isCurrentUser = memberId === user.id;
 
                                 return (
@@ -184,7 +184,7 @@ function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
                                                 <div className="member-details">
                                                     <div className="member-name">
                                                         {member.username || 'Неизвестный'}
-                                                        {isOwner && <span className="owner-badge">Владелец</span>}
+                                                        {isOwner && <span className="owner-badge">Участник</span>}
                                                         {isCurrentUser && <span className="current-user-badge">(Вы)</span>}
                                                     </div>
                                                     <div className="member-id">ID: {memberId}</div>
@@ -193,7 +193,7 @@ function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
                                         </td>
                                         <td>
                                             <span className={`role-badge role-${memberRole.toLowerCase()}`}>
-                                                {isOwner ? 'Владелец' : 'Наблюдатель'}
+                                                {isOwner ? 'Участник' : 'Наблюдатель'}
                                             </span>
                                         </td>
                                         <td>
@@ -246,7 +246,7 @@ function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
 
                         <form onSubmit={handleAddMember}>
                             <div className="form-group">
-                                <label>Выберите пользователя *</label>
+                                <label>Выберите пользователя</label>
                                 <select
                                     value={newMemberForm.user_id}
                                     onChange={(e) => setNewMemberForm({...newMemberForm, user_id: e.target.value})}
@@ -285,9 +285,6 @@ function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
                                         </label>
                                     ))}
                                 </div>
-                                <small className="form-hint">
-                                    Назначение роли "Владелец" даст пользователю полный доступ к проекту
-                                </small>
                             </div>
 
                             <div className="form-actions">

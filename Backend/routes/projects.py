@@ -12,7 +12,7 @@ def get_current_user_role_in_project(project_id, user_id):
         return None
 
     if project.owner == user_id:
-        return 'Owner'
+        return 'Member'
 
     stmt = text("""
         SELECT role FROM project_users
@@ -77,8 +77,8 @@ def update_project(project_id):
         current_user_id = int(get_jwt_identity())
 
         role = get_current_user_role_in_project(project_id, current_user_id)
-        if role != "Owner":
-            return jsonify({"error": "Требуются права Owner "}), 403
+        if role != "Member":
+            return jsonify({"error": "Требуются права Member "}), 403
 
         project = Project.query.get(project_id)
         if not project:
@@ -152,7 +152,7 @@ def get_project_members(project_id):
                 'username': owner.username,
                 'email': owner.email,
                 'user_role': owner.role,
-                'project_role': 'Owner'
+                'project_role': 'Member'
             })
 
     return jsonify(members), 200
@@ -164,8 +164,8 @@ def add_project_member(project_id):
         current_user_id = int(get_jwt_identity())
 
         role = get_current_user_role_in_project(project_id, current_user_id)
-        if role != 'Owner':
-            return jsonify({"error": "Требуются права Owner"}), 403
+        if role != 'Member':
+            return jsonify({"error": "Требуются права Member"}), 403
 
         project = Project.query.get(project_id)
         if not project:
@@ -213,7 +213,7 @@ def update_project_member_role(project_id,user_id):
         current_user_id = int(get_jwt_identity())
         role = get_current_user_role_in_project(project_id, current_user_id)
 
-        if role != 'Owner':
+        if role != 'Member':
             return jsonify({"error":"Требуются права Владельца"})
 
         project = Project.query.get(project_id)
@@ -243,12 +243,12 @@ def update_project_member_role(project_id,user_id):
         validated_data = project_member_schema.load(data)
         new_role = validated_data['role']
 
-        valid_roles = ['Owner', 'VIEWER']
+        valid_roles = ['Member', 'VIEWER']
         if new_role not in valid_roles:
             return jsonify({"error": f"Некорректная роль. Допустимые: {', '.join(valid_roles)}"}), 400
 
-        if new_role == 'Owner':
-            return jsonify({"error": "Роль Owner может быть только у создателя проекта"}), 403
+        if new_role == 'Member':
+            return jsonify({"error": "Роль Member может быть только у членов проекта"}), 403
 
         update_stmt = text("""
             UPDATE project_users
@@ -283,8 +283,8 @@ def remove_project_member(project_id, user_id):
         current_user_id = int(get_jwt_identity())
 
         role = get_current_user_role_in_project(project_id, current_user_id)
-        if role != 'Owner':
-            return jsonify({"error": "Требуются права Owner"}), 403
+        if role != 'Member':
+            return jsonify({"error": "Требуются права Member"}), 403
 
         project = Project.query.get(project_id)
         if not project:
@@ -293,7 +293,7 @@ def remove_project_member(project_id, user_id):
         if project.owner == user_id:
             return jsonify({"error": "Нельзя удалить владельца проекта"}), 403
 
-        if user_id == current_user_id and role != 'Owner':
+        if user_id == current_user_id and role != 'Member':
             return jsonify({"error": "Вы не можете удалить сами себя"}), 403
 
         stmt = text("""

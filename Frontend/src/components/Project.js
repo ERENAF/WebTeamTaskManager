@@ -18,7 +18,7 @@ function Project({ project, user, onBack }) {
         const loadUserRole = async () => {
             try {
                 if (project.owner === user.id) {
-                    setUserProjectRole('Owner');
+                    setUserProjectRole('Member');
                     return;
                 }
 
@@ -31,7 +31,7 @@ function Project({ project, user, onBack }) {
                 });
 
                 if (currentMember) {
-                    const role = currentMember.project_role === 'Owner' ? 'Owner' : 'Viewer';
+                    const role = currentMember.project_role === 'Member' ? 'Member' : 'Viewer';
                     setUserProjectRole(role);
                 } else {
                     setUserProjectRole(null);
@@ -64,7 +64,7 @@ function Project({ project, user, onBack }) {
             canView: true
         };
 
-        if (userProjectRole === 'Owner') {
+        if (userProjectRole === 'Member') {
             return {
                 ...basePermissions,
                 canEditProject: true,
@@ -191,7 +191,7 @@ function Project({ project, user, onBack }) {
                         />
                         <h1>{projectData.name}</h1>
                         <span className={`role-badge role-${userProjectRole.toLowerCase()}`}>
-                            {userProjectRole === 'Owner' ? 'Владелец' : 'Наблюдатель'}
+                            {userProjectRole === 'Member' ? 'Участник' : 'Наблюдатель'}
                         </span>
                     </div>
                 </div>
@@ -223,31 +223,6 @@ function Project({ project, user, onBack }) {
                     <p>{projectData.description}</p>
                 </div>
             )}
-
-            <div className="permissions-info">
-                <h3>Ваши права в этом проекте:</h3>
-                <ul>
-                    <li>Просмотр проекта и задач: ✓ Доступно</li>
-                    {userProjectRole === 'Owner' ? (
-                        <>
-                            <li>Редактирование проекта: ✓ Доступно</li>
-                            <li>Управление участниками: ✓ Доступно</li>
-                            <li>Создание задач: ✓ Доступно</li>
-                            <li>Редактирование задач: ✓ Доступно</li>
-                            <li>Удаление задач: ✓ Доступно</li>
-                        </>
-                    ) : (
-                        <>
-                            <li>Редактирование проекта: ✗ Недоступно</li>
-                            <li>Управление участниками: ✗ Недоступно</li>
-                            <li>Создание задач: ✗ Недоступно</li>
-                            <li>Редактирование задач: ✗ Недоступно</li>
-                            <li>Удаление задач: ✗ Недоступно</li>
-                        </>
-                    )}
-                </ul>
-            </div>
-
             <div className="project-main-content">
                 <div className="project-section">
                     <div className="section-header">

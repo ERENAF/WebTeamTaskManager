@@ -12,7 +12,7 @@ def get_current_user_role_in_project(project_id, user_id):
         return None
 
     if project.owner == user_id:
-        return 'Owner'
+        return 'Member'
 
     stmt = text("""
         SELECT role FROM project_users
@@ -28,7 +28,7 @@ def get_current_user_role_in_project(project_id, user_id):
 def check_task_access(task_id, user_id):
     task = Task.query.get(task_id)
     if not task:
-        return None, None  # task, role
+        return None, None
 
     role = get_current_user_role_in_project(task.project_id, user_id)
     if role:
@@ -122,7 +122,7 @@ def delete_comment(comment_id):
 
         else:
             role = get_current_user_role_in_project(task.project_id, current_user_id)
-            if role == 'Owner':
+            if role == 'Member':
                 can_delete = True
 
         if not can_delete:

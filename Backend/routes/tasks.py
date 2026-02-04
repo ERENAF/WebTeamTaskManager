@@ -12,7 +12,7 @@ def get_current_user_role_in_project(project_id, user_id):
         return None
 
     if project.owner == user_id:
-        return 'Owner'
+        return 'Member'
 
     stmt = text("""
         SELECT role FROM project_users
@@ -28,7 +28,7 @@ def get_current_user_role_in_project(project_id, user_id):
 def check_task_access(task_id, user_id):
     task = Task.query.get(task_id)
     if not task:
-        return None, None  # task, role
+        return None, None
 
     role = get_current_user_role_in_project(task.project_id, user_id)
     if role:
@@ -87,8 +87,8 @@ def create_task():
             return jsonify({"error": "Не указан project_id"}), 400
 
         role = get_current_user_role_in_project(project_id, current_user_id)
-        if role != 'Owner':
-            return jsonify({"error": "Требуются права Owner для создания задач"}), 403
+        if role != 'Member':
+            return jsonify({"error": "Требуются права Member для создания задач"}), 403
 
         validated_data = task_schema.load(data)
 
@@ -148,8 +148,8 @@ def update_task(task_id):
                 setattr(task, key, value)
 
         if 'assignee_ids' in validated_data:
-            if role != 'Owner':
-                return jsonify({"error": "Только Owner может менять исполнителей"}), 403
+            if role != 'Member':
+                return jsonify({"error": "Только Member может менять исполнителей"}), 403
 
 
             task.assignees = []
@@ -174,9 +174,8 @@ def delete_task(task_id):
     if not task:
         return jsonify({"error": "Нет доступа к этой задаче"}), 403
 
-    # Только OWNER может удалять задачи
-    if role != 'Owner':
-        return jsonify({"error": "Требуются права Owner для удаления задач"}), 403
+    if role != 'Member':
+        return jsonify({"error": "Требуются права Member для удаления задач"}), 403
 
     db.session.delete(task)
     db.session.commit()
@@ -193,9 +192,8 @@ def assign_task(task_id):
         if not task:
             return jsonify({"error": "Нет доступа к этой задаче"}), 403
 
-        # Только OWNER может назначать исполнителей
-        if role != 'Owner':
-            return jsonify({"error": "Требуются права Owner для назначения исполнителей"}), 403
+        if role != 'Member':
+            return jsonify({"error": "Требуются права Member для назначения исполнителей"}), 403
 
         data = request.get_json()
         validated_data = task_assignee_schema.load(data)
