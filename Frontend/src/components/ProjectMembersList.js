@@ -2,206 +2,153 @@ import React, { useState, useEffect } from 'react';
 import { projectAPI, usersAPI } from '../services/api';
 import '../styles/projectmemberslist.css';
 
-function ProjectMembersList({ projectId, user }) {
-    // Состояния
+function ProjectMembersList({ projectId, user, userProjectRole, permissions }) {
     const [members, setMembers] = useState([]);
     const [allUsers, setAllUsers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-
-    // Модальное окно для добавления участника
     const [showAddModal, setShowAddModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-
-    // Данные формы
-    const [newMemberData, setNewMemberData] = useState({
+    const [newMemberForm, setNewMemberForm] = useState({
         user_id: '',
-        role: 'VIEWER'
+        role: 'Viewer'
     });
 
-    const [editingMember, setEditingMember] = useState(null);
-
-    // Роли в проекте
-    const projectRoles = [
-        { value: 'VIEWER', label: 'Наблюдатель', description: 'Только просмотр' },
-        { value: 'EDITOR', label: 'Редактор', description: 'Может создавать и редактировать задачи' },
-        { value: 'OWNER', label: 'Владелец', description: 'Полный доступ' }
-    ];
-
-    // Загрузка данных
     useEffect(() => {
+        const loadData = async () => {
+            try {
+                setLoading(true);
+
+                const membersResponse = await projectAPI.get_project_members(projectId);
+                const members = membersResponse.data || [];
+                setMembers(members);
+
+                const usersResponse = await usersAPI.get_users();
+                setAllUsers(usersResponse.data || []);
+
+            } catch (error) {
+                alert('Не удалось загрузить участников проекта');
+            } finally {
+                setLoading(false);
+            }
+        };
+
         if (projectId) {
-            fetchData();
+            loadData();
         }
     }, [projectId]);
 
-    const fetchData = async () => {
-        try {
-            setLoading(true);
-            setError('');
-
-            // Загружаем всех пользователей
-            const usersResponse = await usersAPI.get_users();
-            setAllUsers(usersResponse.data || []);
-
-            // Загружаем участников проекта
-            await fetchProjectMembers();
-
-        } catch (err) {
-            console.error('Ошибка загрузки данных:', err);
-            setError('Не удалось загрузить данные');
-        } finally {
-            setLoading(false);
-        }
+    const getAvailableUsers = () => {
+        const memberIds = members.map(member => member.user_id || member.id);
+        return allUsers.filter(userItem =>
+            !memberIds.includes(userItem.id)
+        );
     };
 
-    // Загрузка участников проекта
-    const fetchProjectMembers = async () => {
-        try {
-            const response = await projectAPI.get_project_members(projectId);
-            setMembers(response.data || []);
-        } catch (err) {
-            console.error('Ошибка загрузки участников:', err);
-            setError('Не удалось загрузить участников');
-            setMembers([]);
-        }
-    };
-
-    // Обработчик добавления участника
     const handleAddMember = async (e) => {
         e.preventDefault();
 
+        if (!permissions.canManageMembers) {
+            alert('Только владелец может добавлять участников');
+            return;
+        }
+
         try {
-            await projectAPI.add_project_member(projectId, newMemberData);
+            const memberData = {
+                user_id: parseInt(newMemberForm.user_id),
+                role: newMemberForm.role
+            };
 
-            // Обновляем список
-            await fetchProjectMembers();
+            await projectAPI.add_project_member(projectId, memberData);
 
-            // Закрываем модальное окно и сбрасываем форму
+            const membersResponse = await projectAPI.get_project_members(projectId);
+            setMembers(membersResponse.data || []);
+
             setShowAddModal(false);
-            setNewMemberData({ user_id: '', role: 'VIEWER' });
+            setNewMemberForm({ user_id: '', role: 'Viewer' });
 
             alert('Участник успешно добавлен!');
 
-        } catch (err) {
-            console.error('Ошибка добавления участника:', err);
-            alert(err.response?.data?.error || 'Ошибка добавления участника');
+        } catch (error) {
+            alert(error.response?.data?.error || 'Ошибка добавления участника');
         }
     };
 
-    // Обработчик изменения роли
-    const handleUpdateRole = async (memberId, newRole) => {
-        try {
-            await projectAPI.update_project_member_role(projectId, memberId, { role: newRole });
-
-            // Обновляем локально
-            setMembers(prev => prev.map(member =>
-                member.user_id === memberId ? { ...member, role: newRole } : member
-            ));
-
-            alert('Роль обновлена!');
-
-        } catch (err) {
-            console.error('Ошибка обновления роли:', err);
-            alert('Не удалось обновить роль');
-        }
-    };
-
-    // Обработчик удаления участника
-    const handleRemoveMember = async (memberId) => {
-        if (!window.confirm('Удалить участника из проекта?')) {
+    const handleRemoveMember = async (memberId, memberName) => {
+        if (!permissions.canManageMembers) {
+            alert('Только владелец может удалять участников');
             return;
+        }
+
+        const member = members.find(m => (m.user_id || m.id) === memberId);
+        if (member && member.project_role === 'Owner') {
+            alert('Нельзя удалить владельца проекта');
+            return;
+        }
+
+        if (memberId === user.id) {
+            const confirmLeave = window.confirm('Вы уверены, что хотите покинуть проект?');
+            if (!confirmLeave) return;
+        } else {
+            const confirmDelete = window.confirm(`Удалить участника "${memberName}" из проекта?`);
+            if (!confirmDelete) return;
         }
 
         try {
             await projectAPI.delete_project_member(projectId, memberId);
 
-            // Удаляем локально
-            setMembers(prev => prev.filter(member => member.user_id !== memberId));
+            const updatedMembers = members.filter(m => (m.user_id || m.id) !== memberId);
+            setMembers(updatedMembers);
 
-            alert('Участник удален из проекта!');
+            if (memberId === user.id) {
+                alert('Вы покинули проект!');
+                window.location.reload();
+            } else {
+                alert('Участник удален из проекта!');
+            }
 
-        } catch (err) {
-            console.error('Ошибка удаления участника:', err);
-            alert('Не удалось удалить участника');
+        } catch (error) {
+            alert(error.response?.data?.error || 'Ошибка удаления участника');
         }
     };
 
-    // Открытие модального окна редактирования
-    const handleEditClick = (member) => {
-        setEditingMember(member);
-        setShowEditModal(true);
-    };
+    const roleOptions = [
+        { value: 'Viewer', label: 'Наблюдатель', description: 'Может только просматривать проект и задачи' },
+        { value: 'Owner', label: 'Владелец', description: 'Полный доступ ко всем функциям проекта' }
+    ];
 
-    // Сохранение изменений
-    const handleSaveEdit = async () => {
-        if (!editingMember) return;
-
-        try {
-            await projectAPI.update_project_member_role(
-                projectId,
-                editingMember.user_id,
-                { role: editingMember.role }
-            );
-
-            // Обновляем локально
-            setMembers(prev => prev.map(member =>
-                member.user_id === editingMember.user_id ? editingMember : member
-            ));
-
-            setShowEditModal(false);
-            setEditingMember(null);
-
-            alert('Изменения сохранены!');
-
-        } catch (err) {
-            console.error('Ошибка сохранения:', err);
-            alert('Не удалось сохранить изменения');
-        }
-    };
-
-    // Проверка прав доступа
-    const canManageMembers = () => {
-        // В реальном приложении проверяем роль пользователя в проекте
-        return user.role === 'admin' || members.some(m => m.user_id === user.id && m.role === 'OWNER');
-    };
-
-    // Пользователи, которых можно добавить
-    const availableUsers = allUsers.filter(user =>
-        !members.some(member => member.user_id === user.id)
-    );
+    const availableUsers = getAvailableUsers();
 
     if (loading) {
-        return <div className="loading">Загрузка участников...</div>;
+        return (
+            <div className="members-loading">
+                <div className="loading-spinner"></div>
+                <p>Загрузка участников...</p>
+            </div>
+        );
     }
 
     return (
         <div className="project-members-container">
-            {/* Заголовок и кнопка */}
             <div className="members-header">
-                <h2>Участники проекта ({members.length})</h2>
-                {canManageMembers() && (
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="btn btn-primary"
-                        disabled={availableUsers.length === 0}
-                    >
-                        + Добавить участника
-                    </button>
+                <h3>Участники проекта ({members.length})</h3>
+
+                {permissions.canManageMembers && (
+                    <div className="header-actions">
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="btn btn-primary"
+                            disabled={availableUsers.length === 0}
+                        >
+                            Добавить участника
+                        </button>
+                    </div>
                 )}
             </div>
 
-            {/* Сообщение об ошибке */}
-            {error && (
-                <div className="error-message">{error}</div>
-            )}
-
-            {/* Список участников */}
-            <div className="members-list">
+            <div className="members-table-container">
                 {members.length === 0 ? (
                     <div className="no-members">
                         <p>В проекте пока нет участников</p>
-                        {canManageMembers() && (
+                        {permissions.canManageMembers && (
                             <button
                                 onClick={() => setShowAddModal(true)}
                                 className="btn btn-primary"
@@ -215,73 +162,83 @@ function ProjectMembersList({ projectId, user }) {
                         <thead>
                             <tr>
                                 <th>Пользователь</th>
-                                <th>Роль</th>
+                                <th>Роль в проекте</th>
                                 <th>Email</th>
-                                <th>Действия</th>
+                                {permissions.canManageMembers && <th>Действия</th>}
                             </tr>
                         </thead>
                         <tbody>
-                            {members.map(member => (
-                                <tr key={member.user_id}>
-                                    <td>
-                                        <div className="member-info">
-                                            <div className="member-avatar">
-                                                {member.username?.charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <div className="member-name">{member.username}</div>
-                                                <div className="member-role-label">
-                                                    {projectRoles.find(r => r.value === member.role)?.label}
+                            {members.map((member, index) => {
+                                const memberId = member.user_id || member.id;
+                                const memberRole = member.project_role || member.role;
+                                const isOwner = memberRole === 'Owner';
+                                const isCurrentUser = memberId === user.id;
+
+                                return (
+                                    <tr key={`member-${memberId}-${index}`}>
+                                        <td>
+                                            <div className="member-info">
+                                                <div className="member-avatar">
+                                                    {member.username?.charAt(0).toUpperCase() || 'U'}
+                                                </div>
+                                                <div className="member-details">
+                                                    <div className="member-name">
+                                                        {member.username || 'Неизвестный'}
+                                                        {isOwner && <span className="owner-badge">Владелец</span>}
+                                                        {isCurrentUser && <span className="current-user-badge">(Вы)</span>}
+                                                    </div>
+                                                    <div className="member-id">ID: {memberId}</div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        {canManageMembers() && member.role !== 'OWNER' ? (
-                                            <select
-                                                value={member.role}
-                                                onChange={(e) => handleUpdateRole(member.user_id, e.target.value)}
-                                                className="role-select"
-                                            >
-                                                {projectRoles.map(role => (
-                                                    <option key={role.value} value={role.value}>
-                                                        {role.label}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <span className="role-display">
-                                                {projectRoles.find(r => r.value === member.role)?.label}
+                                        </td>
+                                        <td>
+                                            <span className={`role-badge role-${memberRole.toLowerCase()}`}>
+                                                {isOwner ? 'Владелец' : 'Наблюдатель'}
                                             </span>
+                                        </td>
+                                        <td>
+                                            <span className="member-email">
+                                                {member.email || '—'}
+                                            </span>
+                                        </td>
+                                        {permissions.canManageMembers && (
+                                            <td>
+                                                <div className="member-actions">
+                                                    {!isOwner && (
+                                                        <button
+                                                            onClick={() => handleRemoveMember(memberId, member.username)}
+                                                            className="btn btn-danger"
+                                                        >
+                                                            {isCurrentUser ? 'Покинуть' : 'Удалить'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
                                         )}
-                                    </td>
-                                    <td>{member.email}</td>
-                                    <td>
-                                        {canManageMembers() && member.role !== 'OWNER' && (
-                                            <button
-                                                onClick={() => handleRemoveMember(member.user_id)}
-                                                className="btn btn-danger btn-sm"
-                                            >
-                                                Удалить
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 )}
             </div>
 
-            {/* Модальное окно добавления участника */}
+            {permissions.canManageMembers && (
+                <div className="available-users-info">
+                    <p>
+                        <strong>Доступно для добавления:</strong> {availableUsers.length} пользователей
+                    </p>
+                </div>
+            )}
+
             {showAddModal && (
-                <div className="modal-overlay">
-                    <div className="modal">
+                <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h3>Добавить участника</h3>
+                            <h3>Добавить участника в проект</h3>
                             <button
-                                onClick={() => setShowAddModal(false)}
                                 className="close-btn"
+                                onClick={() => setShowAddModal(false)}
                             >
                                 ×
                             </button>
@@ -289,124 +246,67 @@ function ProjectMembersList({ projectId, user }) {
 
                         <form onSubmit={handleAddMember}>
                             <div className="form-group">
-                                <label>Пользователь:</label>
+                                <label>Выберите пользователя *</label>
                                 <select
-                                    value={newMemberData.user_id}
-                                    onChange={(e) => setNewMemberData(prev => ({
-                                        ...prev,
-                                        user_id: e.target.value
-                                    }))}
+                                    value={newMemberForm.user_id}
+                                    onChange={(e) => setNewMemberForm({...newMemberForm, user_id: e.target.value})}
                                     required
-                                    className="form-select"
                                 >
-                                    <option value="">Выберите пользователя</option>
-                                    {availableUsers.map(user => (
-                                        <option key={user.id} value={user.id}>
-                                            {user.username} ({user.email})
+                                    <option value="">Выберите пользователя...</option>
+                                    {availableUsers.map(userItem => (
+                                        <option key={userItem.id} value={userItem.id}>
+                                            {userItem.username} ({userItem.email})
                                         </option>
                                     ))}
                                 </select>
-                                <small className="hint">
-                                    Доступно: {availableUsers.length} пользователей
-                                </small>
+                                {availableUsers.length === 0 && (
+                                    <small className="form-hint error">
+                                        Нет доступных пользователей для добавления
+                                    </small>
+                                )}
                             </div>
 
                             <div className="form-group">
-                                <label>Роль в проекте:</label>
-                                <select
-                                    value={newMemberData.role}
-                                    onChange={(e) => setNewMemberData(prev => ({
-                                        ...prev,
-                                        role: e.target.value
-                                    }))}
-                                    className="form-select"
-                                >
-                                    {projectRoles.map(role => (
-                                        <option key={role.value} value={role.value}>
-                                            {role.label} - {role.description}
-                                        </option>
+                                <label>Роль в проекте</label>
+                                <div className="role-options">
+                                    {roleOptions.map(option => (
+                                        <label key={option.value} className="role-option">
+                                            <input
+                                                type="radio"
+                                                name="role"
+                                                value={option.value}
+                                                checked={newMemberForm.role === option.value}
+                                                onChange={(e) => setNewMemberForm({...newMemberForm, role: e.target.value})}
+                                            />
+                                            <div className="role-content">
+                                                <div className="role-title">{option.label}</div>
+                                                <div className="role-description">{option.description}</div>
+                                            </div>
+                                        </label>
                                     ))}
-                                </select>
+                                </div>
+                                <small className="form-hint">
+                                    Назначение роли "Владелец" даст пользователю полный доступ к проекту
+                                </small>
                             </div>
 
-                            <div className="modal-actions">
-                                <button type="submit" className="btn btn-primary">
-                                    Добавить
+                            <div className="form-actions">
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={availableUsers.length === 0}
+                                >
+                                    Добавить участника
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setShowAddModal(false)}
                                     className="btn btn-secondary"
+                                    onClick={() => setShowAddModal(false)}
                                 >
                                     Отмена
                                 </button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Модальное окно редактирования роли */}
-            {showEditModal && editingMember && (
-                <div className="modal-overlay">
-                    <div className="modal">
-                        <div className="modal-header">
-                            <h3>Изменение роли участника</h3>
-                            <button
-                                onClick={() => setShowEditModal(false)}
-                                className="close-btn"
-                            >
-                                ×
-                            </button>
-                        </div>
-
-                        <div className="edit-form">
-                            <div className="member-info-large">
-                                <div className="member-avatar large">
-                                    {editingMember.username?.charAt(0).toUpperCase()}
-                                </div>
-                                <div>
-                                    <h4>{editingMember.username}</h4>
-                                    <p>{editingMember.email}</p>
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <label>Роль в проекте:</label>
-                                <div className="role-options">
-                                    {projectRoles.map(role => (
-                                        <label key={role.value} className="role-option">
-                                            <input
-                                                type="radio"
-                                                name="role"
-                                                value={role.value}
-                                                checked={editingMember.role === role.value}
-                                                onChange={(e) => setEditingMember(prev => ({
-                                                    ...prev,
-                                                    role: e.target.value
-                                                }))}
-                                            />
-                                            <div className="role-content">
-                                                <div className="role-title">{role.label}</div>
-                                                <div className="role-description">{role.description}</div>
-                                            </div>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="modal-actions">
-                                <button onClick={handleSaveEdit} className="btn btn-primary">
-                                    Сохранить
-                                </button>
-                                <button
-                                    onClick={() => setShowEditModal(false)}
-                                    className="btn btn-secondary"
-                                >
-                                    Отмена
-                                </button>
-                            </div>
-                        </div>
                     </div>
                 </div>
             )}

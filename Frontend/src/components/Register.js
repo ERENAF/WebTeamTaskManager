@@ -55,6 +55,11 @@ function Register({ onRegisterSuccess, onSwitchToLogin, enums }) {
             };
 
             const response = await authAPI.register(userData);
+            const { user, access_token, refresh_token } = response.data;
+
+            localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('access_token', access_token);
+            localStorage.setItem('refresh_token', refresh_token);
 
             onRegisterSuccess(response.data);
 
@@ -62,11 +67,10 @@ function Register({ onRegisterSuccess, onSwitchToLogin, enums }) {
             if (err.response) {
                 setError(err.response.data.error || 'Ошибка регистрации');
             } else if (err.request) {
-                setError('Нет ответа от сервера. Проверьте подключение.');
+                setError('Нет ответа от сервера');
             } else {
-                setError('Произошла ошибка: ' + err.message);
+                setError('Произошла ошибка');
             }
-            console.error('Register error:', err);
         } finally {
             setLoading(false);
         }
@@ -74,16 +78,14 @@ function Register({ onRegisterSuccess, onSwitchToLogin, enums }) {
 
     return (
         <div className="register-container">
-            <h2 className="register-title">Регистрация</h2>
+            <h2>Регистрация</h2>
 
-            {/* Сообщение об ошибке */}
             {error && (
                 <div className="login-error">
                     {error}
                 </div>
             )}
 
-            {/* Форма регистрации */}
             <form onSubmit={handleSubmit} className="register-form">
                 <div className="form-row">
                     <div className="form-group">
@@ -184,7 +186,6 @@ function Register({ onRegisterSuccess, onSwitchToLogin, enums }) {
                 </button>
             </form>
 
-            {/* Ссылка на вход */}
             <div className="login-link">
                 Уже есть аккаунт?{' '}
                 <button

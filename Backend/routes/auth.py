@@ -1,23 +1,9 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from models import db, User
 from schemas import registration_schema, login_schema, user_schema
-from werkzeug.security import check_password_hash
-import jwt
-import datetime
-import os
 
 auth_bp = Blueprint('auth', __name__)
-
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'fanera-dev-secret-key')
-JWT_EXPIRATION_HOURS = 24
-
-def generate_token(user_id):
-    payload = {
-        'user_id' : user_id,
-        'exp' : datetime.datetime.utcnow() + datetime.timedelta(hours=JWT_EXPIRATION_HOURS)
-    }
-    return jwt.encode(payload, JWT_SECRET_KEY, algorithm='HS256')
-
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
@@ -39,12 +25,14 @@ def register():
         db.session.add(user)
         db.session.commit()
 
-        token = generate_token(user.id)
+        access_token = create_access_token(identity=str(user.id))
+        refresh_token = create_refresh_token(identity=str(user.id))
 
         return jsonify({
             "message": "Регистрация успешна",
             "user": user_schema.dump(user),
-            "token": token
+            "access_token": access_token,
+            "refresh_token": refresh_token
         }), 201
 
     except Exception as e:
@@ -61,12 +49,34 @@ def login():
         if not user or not user.check_password(validated_data['password']):
             return jsonify({"error": "Неверный email или пароль"}), 401
 
-        token = generate_token(user.id)
+        access_token = create_access_token(identity=str(user.id))
+        refresh_token = create_refresh_token(identity=str(user.id))
 
         return jsonify({
             "message": "Вход успешен",
             "user": user_schema.dump(user),
-            "token": token
+            "access_token": access_token,
+            "refresh_token": refresh_token
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@auth_bp.route('/refresh', methods=['POST'])
+@jwt_required(refresh=True)
+def refresh():
+    try:
+        current_user_id = get_jwt_identity()
+
+        user = User.query.get(int(current_user_id))
+        if not user:
+            return jsonify({"error": "Пользователь не найден"}), 401
+
+        new_access_token = create_access_token(identity=str(user.id))
+
+        return jsonify({
+            "message": "Токен обновлен",
+            "access_token": new_access_token
         }), 200
 
     except Exception as e:

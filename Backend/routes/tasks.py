@@ -43,7 +43,7 @@ def check_task_access(task_id, user_id):
 @jwt_required()
 def get_tasks():
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         filters = task_filter_schema.load(request.args)
 
         query = Task.query.join(Project).filter(
@@ -79,7 +79,7 @@ def get_tasks():
 @jwt_required()
 def create_task():
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         data = request.get_json()
 
         project_id = data.get('project_id')
@@ -87,29 +87,39 @@ def create_task():
             return jsonify({"error": "Не указан project_id"}), 400
 
         role = get_current_user_role_in_project(project_id, current_user_id)
-        if role not in ['Owner', 'EDITOR']:
-            return jsonify({"error": "Требуются права Owner или EDITOR для создания задач"}), 403
+        if role != 'Owner':
+            return jsonify({"error": "Требуются права Owner для создания задач"}), 403
 
         validated_data = task_schema.load(data)
-        task = Task(**validated_data)
+
+        task_data = {k: v for k, v in validated_data.items() if k != 'assignee_ids'}
+        task = Task(**task_data)
         db.session.add(task)
+        db.session.flush()
 
         if 'assignee_ids' in validated_data:
-            for user_id in validated_data['assignee_ids']:
+            assignee_ids = validated_data['assignee_ids']
+
+            for user_id in assignee_ids:
                 user = User.query.get(user_id)
                 if user:
                     task.assignees.append(user)
-
         db.session.commit()
+
         return task_schema.dump(task), 201
 
     except Exception as e:
+        db.session.rollback()
+
+        if hasattr(e, 'messages'):
+            return jsonify({"error": "Ошибка валидации", "details": e.messages}), 400
+
         return jsonify({"error": str(e)}), 400
 
 @tasks_bp.route('/<int:task_id>', methods=['GET'])
 @jwt_required()
 def get_task(task_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     task, role = check_task_access(task_id, current_user_id)
     if not task:
@@ -121,36 +131,29 @@ def get_task(task_id):
 @jwt_required()
 def update_task(task_id):
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         task, role = check_task_access(task_id, current_user_id)
         if not task:
             return jsonify({"error": "Нет доступа к этой задаче"}), 403
 
         if role == 'VIEWER':
-            return jsonify({"error": "VIEWER не может изменять задачи"}), 403
+            return jsonify({"error": "Наблюдатель не может изменять задачи"}), 403
 
         data = request.get_json()
         validated_data = task_schema.load(data, partial=True)
-
-        if role == 'Assignee':
-            allowed_fields = ['status']
-            for key in validated_data.keys():
-                if key not in allowed_fields:
-                    return jsonify({"error": f"Исполнитель может менять только: {', '.join(allowed_fields)}"}), 403
-
-        if role == 'EDITOR' and 'project_id' in validated_data:
-            return jsonify({"error": "EDITOR не может перемещать задачи между проектами"}), 403
 
         for key, value in validated_data.items():
             if key != 'assignee_ids':
                 setattr(task, key, value)
 
         if 'assignee_ids' in validated_data:
-            if role not in ['Owner', 'EDITOR']:
-                return jsonify({"error": "Только Owner или EDITOR могут менять исполнителей"}), 403
+            if role != 'Owner':
+                return jsonify({"error": "Только Owner может менять исполнителей"}), 403
+
 
             task.assignees = []
+
             for user_id in validated_data['assignee_ids']:
                 user = User.query.get(user_id)
                 if user:
@@ -165,14 +168,15 @@ def update_task(task_id):
 @tasks_bp.route('/<int:task_id>', methods=['DELETE'])
 @jwt_required()
 def delete_task(task_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     task, role = check_task_access(task_id, current_user_id)
     if not task:
         return jsonify({"error": "Нет доступа к этой задаче"}), 403
 
-    if role not in ['Owner', 'EDITOR']:
-        return jsonify({"error": "Требуются права Owner или EDITOR для удаления задач"}), 403
+    # Только OWNER может удалять задачи
+    if role != 'Owner':
+        return jsonify({"error": "Требуются права Owner для удаления задач"}), 403
 
     db.session.delete(task)
     db.session.commit()
@@ -183,14 +187,15 @@ def delete_task(task_id):
 @jwt_required()
 def assign_task(task_id):
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         task, role = check_task_access(task_id, current_user_id)
         if not task:
             return jsonify({"error": "Нет доступа к этой задаче"}), 403
 
-        if role not in ['Owner', 'EDITOR']:
-            return jsonify({"error": "Требуются права Owner или EDITOR для назначения исполнителей"}), 403
+        # Только OWNER может назначать исполнителей
+        if role != 'Owner':
+            return jsonify({"error": "Требуются права Owner для назначения исполнителей"}), 403
 
         data = request.get_json()
         validated_data = task_assignee_schema.load(data)

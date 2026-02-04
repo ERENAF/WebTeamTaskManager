@@ -28,7 +28,7 @@ def get_current_user_role_in_project(project_id, user_id):
 @projects_bp.route('', methods=['GET'])
 @jwt_required()
 def get_projects():
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     user_projects = Project.query.filter(
         (Project.owner == current_user_id) |
@@ -41,7 +41,7 @@ def get_projects():
 @jwt_required()
 def create_project():
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
         data = request.get_json()
         data['owner'] = current_user_id
 
@@ -58,7 +58,7 @@ def create_project():
 @projects_bp.route('/<int:project_id>', methods=['GET'])
 @jwt_required()
 def get_project(project_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     role = get_current_user_role_in_project(project_id, current_user_id)
     if not role:
@@ -74,11 +74,11 @@ def get_project(project_id):
 @jwt_required()
 def update_project(project_id):
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         role = get_current_user_role_in_project(project_id, current_user_id)
-        if role not in ['Owner', 'EDITOR']:
-            return jsonify({"error": "Требуются права Owner или EDITOR"}), 403
+        if role != "Owner":
+            return jsonify({"error": "Требуются права Owner "}), 403
 
         project = Project.query.get(project_id)
         if not project:
@@ -99,7 +99,7 @@ def update_project(project_id):
 @projects_bp.route('/<int:project_id>', methods=['DELETE'])
 @jwt_required()
 def delete_project(project_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     project = Project.query.get(project_id)
     if not project:
@@ -116,7 +116,7 @@ def delete_project(project_id):
 @projects_bp.route('/<int:project_id>/members', methods=['GET'])
 @jwt_required()
 def get_project_members(project_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     role = get_current_user_role_in_project(project_id, current_user_id)
     if not role:
@@ -161,11 +161,11 @@ def get_project_members(project_id):
 @jwt_required()
 def add_project_member(project_id):
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         role = get_current_user_role_in_project(project_id, current_user_id)
-        if role not in ['Owner', 'EDITOR']:
-            return jsonify({"error": "Требуются права Owner или EDITOR"}), 403
+        if role != 'Owner':
+            return jsonify({"error": "Требуются права Owner"}), 403
 
         project = Project.query.get(project_id)
         if not project:
@@ -210,8 +210,7 @@ def add_project_member(project_id):
 @jwt_required()
 def update_project_member_role(project_id,user_id):
     try:
-        current_user_id = get_jwt_identity()
-
+        current_user_id = int(get_jwt_identity())
         role = get_current_user_role_in_project(project_id, current_user_id)
 
         if role != 'Owner':
@@ -244,7 +243,7 @@ def update_project_member_role(project_id,user_id):
         validated_data = project_member_schema.load(data)
         new_role = validated_data['role']
 
-        valid_roles = ['Owner', 'EDITOR', 'VIEWER']
+        valid_roles = ['Owner', 'VIEWER']
         if new_role not in valid_roles:
             return jsonify({"error": f"Некорректная роль. Допустимые: {', '.join(valid_roles)}"}), 400
 
@@ -281,11 +280,11 @@ def update_project_member_role(project_id,user_id):
 @jwt_required()
 def remove_project_member(project_id, user_id):
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         role = get_current_user_role_in_project(project_id, current_user_id)
-        if role not in ['Owner', 'EDITOR']:
-            return jsonify({"error": "Требуются права Owner или EDITOR"}), 403
+        if role != 'Owner':
+            return jsonify({"error": "Требуются права Owner"}), 403
 
         project = Project.query.get(project_id)
         if not project:

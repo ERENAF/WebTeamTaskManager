@@ -1,17 +1,31 @@
-import axios  from "axios";
+import axios from "axios";
 
 const API_URL = 'http://localhost:5000/api'
 
 const api = axios.create({
     baseURL: API_URL,
     headers: {
-        'Content-Type':'application/json'
+        'Content-Type': 'application/json'
     }
 });
 
-api.interceptors.request.use((config) =>{
-    const token = localStorage.getItem('token');
-    if (token){
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -19,117 +33,144 @@ api.interceptors.request.use((config) =>{
 
 api.interceptors.response.use(
     (response) => response,
-    (error) =>{
-        if (error.response && error.response.status == 401){
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/';
+    async (error) => {
+        const originalRequest = error.config;
+        if (error.response && error.response.status === 401 && !originalRequest._retry) {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then(token => {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    return api(originalRequest);
+                }).catch(err => {
+                    return Promise.reject(err);
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            const refreshToken = localStorage.getItem('refresh_token');
+
+            if (!refreshToken) {
+                logoutUser();
+                return Promise.reject(error);
+            }
+
+            try {
+                const response = await axios.post(`${API_URL}/refresh`, {}, {
+                    headers: {
+                        'Authorization': `Bearer ${refreshToken}`
+                    }
+                });
+
+                const newAccessToken = response.data.access_token;
+                localStorage.setItem('access_token', newAccessToken);
+                originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+                processQueue(null, newAccessToken);
+                return api(originalRequest);
+
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                logoutUser();
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
         }
+        if (error.response && error.response.status === 401) {
+            logoutUser();
+        }
+
         return Promise.reject(error);
     }
 );
 
-//разработка
-export const systemAPI = {
-    health : () => api.get(`/health`),
-    enums : () => api.get(`/enums`),
-    initTestDB : () => api.get(`/init-db`)
-};
+// Функция для выхода пользователя
+const logoutUser = () => {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
 
-export const authAPI = {
-    register: async (userData) => {
-        const response = await api.post(`/register`, userData);
-        return response;
-    },
-    login: async (userData) => {
-        const response = await api.post(`/login`, userData);
-        return response;
+    if (window.location.pathname !== '/') {
+        window.location.href = '/';
     }
 };
 
-export const usersAPI ={
-    get_users: () => api.get(`/users`),
+const refreshAccessToken = async () => {
+    const refreshToken = localStorage.getItem('refresh_token');
+
+    if (!refreshToken) {
+        throw new Error('No refresh token available');
+    }
+
+    try {
+        const response = await axios.post(`${API_URL}/refresh`, {}, {
+            headers: {
+                'Authorization': `Bearer ${refreshToken}`
+            }
+        });
+
+        const newAccessToken = response.data.access_token;
+        localStorage.setItem('access_token', newAccessToken);
+
+        return newAccessToken;
+    } catch (error) {
+        logoutUser();
+        throw error;
+    }
+};
+
+export const systemAPI = {
+    health: () => api.get('/health'),
+    enums: () => api.get('/enums'),
+    initTestDB: () => api.post('/init-db'),
+    dbStats: () => api.get('/db-stats')
+};
+
+export const authAPI = {
+    register: (userData) => api.post('/register', userData),
+    login: (userData) => api.post('/login', userData),
+    refresh: () => api.post('/refresh'),
+    logout: () => api.post('/logout'),
+    verify: () => api.get('/auth/verify')
+};
+
+export const usersAPI = {
+    get_users: () => api.get('/users'),
     get_user: (id) => api.get(`/users/${id}`)
 };
 
 export const projectAPI = {
-    get_projects: () => api.get(`/projects`),
+    get_projects: () => api.get('/projects'),
     get_project: (id) => api.get(`/projects/${id}`),
-    create_project: (projectData) => api.post(`/projects`,projectData),
-    update_project: (id,projectData) => api.put(`/projects/${id}`,projectData),
+    create_project: (projectData) => api.post('/projects', projectData),
+    update_project: (id, projectData) => api.put(`/projects/${id}`, projectData),
     delete_project: (id) => api.delete(`/projects/${id}`),
 
-    get_project_members : (project_id) => api.get(`/projects/${project_id}/members`),
-    add_project_member : (project_id, member_data) => api.post(`/projects/${project_id}/members`,member_data),
-    update_project_member_role : (project_id,member_id, data) => api.put(`/projects/${project_id}/members/${member_id}`,data),
-    delete_project_member : (project_id,member_id) => api.delete(`/projects/${project_id}/members/${member_id}`)
+    get_project_members: (project_id) => api.get(`/projects/${project_id}/members`),
+    add_project_member: (project_id, member_data) => api.post(`/projects/${project_id}/members`, member_data),
+    update_project_member_role: (project_id, member_id, data) => api.put(`/projects/${project_id}/members/${member_id}`, data),
+    delete_project_member: (project_id, member_id) => api.delete(`/projects/${project_id}/members/${member_id}`)
 };
 
 export const taskAPI = {
-    get_tasks: () => api.get(`/tasks`),
-    create_task: (taskData) => api.post(`/tasks`,taskData),
-    get_task: (id) => api.get(`/task/${id}`),
-    update_task : (id, taskData) => api.put(`/projects/${id}`,taskData),
-    delete_task : (id) => api.delete(`/tasks/${id}`),
-    assign_task : (id,data) => api.post(`/tasks/${id}/assignees`,data)
-};
-
-export const helperAPI = {
-    checkAvailability: async () => {
-        try {
-            await systemAPI.health();
-            return { available: true, message: 'API доступен' };
-        } catch (error) {
-            return {
-                available: false,
-                message: 'API недоступен',
-                error: error.message
-            };
-        }
+    get_tasks: (params = {}) => {
+        const cleanParams = {};
+        Object.keys(params).forEach(key => {
+            if (params[key] !== '' && params[key] != null) {
+                cleanParams[key] = params[key];
+            }
+        });
+        return api.get('/tasks', { params: cleanParams });
     },
-
-    getEnumsForForms: async () => {
-        const response = await systemAPI.enums();
-        const data = response.data;
-
-        return {
-            priorities: [
-                { value: 'None', label: 'Без приоритета' },
-                { value: 'Low', label: 'Низкий' },
-                { value: 'Medium', label: 'Средний' },
-                { value: 'High', label: 'Высокий' },
-                { value: 'Critical', label: 'Критический' }
-            ],
-            categories: [
-                { value: 'None', label: 'Без категории' },
-                { value: 'Bug', label: 'Ошибка' },
-                { value: 'Feature', label: 'Функция' },
-                { value: 'Improvement', label: 'Улучшение' },
-                { value: 'Documentation', label: 'Документация' }
-            ],
-            statuses: [
-                { value: 'None', label: 'Не задан' },
-                { value: 'ToDo', label: 'К выполнению' },
-                { value: 'InProgress', label: 'В работе' },
-                { value: 'Review', label: 'На проверке' },
-                { value: 'Done', label: 'Выполнено' }
-            ],
-            colors: [
-                { value: '#FFFFFF', label: 'Белый' },
-                { value: '#000000', label: 'Черный' },
-                { value: '#FF0000', label: 'Красный' },
-                { value: '#00FF00', label: 'Зеленый' },
-                { value: '#0000FF', label: 'Синий' },
-                { value: '#FFFF00', label: 'Желтый' },
-                { value: '#FFA500', label: 'Оранжевый' },
-                { value: '#800080', label: 'Фиолетовый' }
-            ],
-            userRoles: [
-                { value: 'admin', label: 'Администратор' },
-                { value: 'client', label: 'Пользователь' }
-            ]
-        };
-    }
+    get_task: (id) => api.get(`/tasks/${id}`),
+    create_task: (taskData) => api.post('/tasks', taskData),
+    update_task: (id, taskData) => api.put(`/tasks/${id}`, taskData),
+    delete_task: (id) => api.delete(`/tasks/${id}`),
+    assign_task: (id, data) => api.post(`/tasks/${id}/assignees`, data)
 };
+
+export { refreshAccessToken, logoutUser };
 
 export default api;

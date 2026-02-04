@@ -26,9 +26,9 @@ class UserSchema(Schema):
 
 class ProjectSchema(Schema):
     id = fields.Int(dump_only=True)
-    name = fields.Str(required=True, validate=validate.Length(max=128))
+    name = fields.Str(required=True)
     description = fields.Str(allow_none=True)
-    color = fields.Str(validate=validate.OneOf(COLORS))
+    color = fields.Str(allow_none=True)
     owner = fields.Int(allow_none=True)
     creation_date = fields.DateTime(dump_only=True)
 
@@ -44,10 +44,6 @@ class TaskSchema(Schema):
     project_id = fields.Int(required=True)
     parent_id = fields.Int(allow_none=True)
     assignee_ids = fields.List(fields.Int(), load_only=True, required=False)
-
-    @validates('deadline_date')
-    def validate_deadline(self, value):
-        return validate_deadline_not_past(value)
 
 class CommentSchema(Schema):
     id = fields.Int(dump_only=True)

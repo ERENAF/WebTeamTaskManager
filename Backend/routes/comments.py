@@ -42,7 +42,7 @@ def check_task_access(task_id, user_id):
 @comments_bp.route('/tasks/<int:task_id>/comments', methods=['GET'])
 @jwt_required()
 def get_comments(task_id):
-    current_user_id = get_jwt_identity()
+    current_user_id = int(get_jwt_identity())
 
     task, role = check_task_access(task_id, current_user_id)
     if not task:
@@ -55,7 +55,7 @@ def get_comments(task_id):
 @jwt_required()
 def create_comment(task_id):
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         task, role = check_task_access(task_id, current_user_id)
         if not task:
@@ -80,7 +80,7 @@ def create_comment(task_id):
 @jwt_required()
 def update_comment(comment_id):
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         comment = Comment.query.get(comment_id)
         if not comment:
@@ -104,7 +104,7 @@ def update_comment(comment_id):
 @jwt_required()
 def delete_comment(comment_id):
     try:
-        current_user_id = get_jwt_identity()
+        current_user_id = int(get_jwt_identity())
 
         comment = Comment.query.get(comment_id)
         if not comment:
@@ -122,7 +122,7 @@ def delete_comment(comment_id):
 
         else:
             role = get_current_user_role_in_project(task.project_id, current_user_id)
-            if role in ['Owner', 'EDITOR']:
+            if role == 'Owner':
                 can_delete = True
 
         if not can_delete:

@@ -15,6 +15,12 @@ function Login({ onLoginSuccess, onSwitchToRegister, enums }) {
 
         try {
             const response = await authAPI.login({ email, password });
+            const { user, access_token, refresh_token } = response.data;
+
+            // Сохраняем оба токена
+            localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('access_token', access_token);
+            localStorage.setItem('refresh_token', refresh_token);
 
             onLoginSuccess(response.data);
 

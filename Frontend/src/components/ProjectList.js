@@ -1,312 +1,297 @@
 import React, { useState, useEffect } from 'react';
 import { projectAPI } from '../services/api';
 import '../styles/projectlist.css';
-import ProjectMembersList from './ProjectMembersList';
 
-function ProjectList({ user }) {
+function ProjectList({ user, onSelectProject }) {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-
-    const [showModal, setShowModal] = useState(false);
-    const [modalType, setModalType] = useState('create');
-    const [editingProject, setEditingProject] = useState(null);
-
-    const [formData, setFormData] = useState({
-        name: '',
-        description: '',
-        color: '#FFFFFF'
-    });
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [projectName, setProjectName] = useState('');
+    const [projectDescription, setProjectDescription] = useState('');
 
     useEffect(() => {
         fetchProjects();
-    }, []);
+    }, [user]);
 
     const fetchProjects = async () => {
         try {
             setLoading(true);
             setError('');
+
             const response = await projectAPI.get_projects();
             setProjects(response.data || []);
+
         } catch (err) {
-            console.error('Ошибка загрузки проектов:', err);
-            setError('Не удалось загрузить проекты');
-            setProjects([]);
+            let errorMessage = 'Не удалось загрузить проекты';
+
+            if (err.response) {
+                switch (err.response.status) {
+                    case 401:
+                        errorMessage = 'Ошибка авторизации';
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('refresh_token');
+                        break;
+                    case 403:
+                        errorMessage = 'Доступ запрещен';
+                        break;
+                    case 422:
+                        errorMessage = 'Ошибка валидации данных';
+                        break;
+                    default:
+                        errorMessage = err.response.data?.error || `Ошибка сервера: ${err.response.status}`;
+                }
+            } else if (err.request) {
+                errorMessage = 'Нет ответа от сервера';
+            }
+
+            setError(errorMessage);
+
+            if (err.response?.status === 401) {
+                setTimeout(() => {
+                    if (window.confirm('Сессия истекла. Хотите войти заново?')) {
+                        localStorage.clear();
+                        window.location.reload();
+                    }
+                }, 1000);
+            }
         } finally {
             setLoading(false);
         }
     };
 
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
-
-    const handleColorSelect = (color) => {
-        setFormData(prev => ({
-            ...prev,
-            color: color
-        }));
-    };
-
-    const handleCreateClick = () => {
-        setFormData({
-            name: '',
-            description: '',
-            color: '#FFFFFF'
-        });
-        setModalType('create');
-        setShowModal(true);
-    };
-
-    const handleEditClick = (project) => {
-        setFormData({
-            name: project.name,
-            description: project.description || '',
-            color: project.color || '#FFFFFF'
-        });
-        setEditingProject(project);
-        setModalType('edit');
-        setShowModal(true);
-    };
-
     const handleCreateProject = async (e) => {
         e.preventDefault();
 
+        if (!projectName.trim()) {
+            alert('Введите название проекта');
+            return;
+        }
+
         try {
-            const response = await projectAPI.create_project(formData);
+            const projectData = {
+                name: projectName,
+                description: projectDescription,
+                color: '#3498db'
+            };
 
+            const response = await projectAPI.create_project(projectData);
             setProjects(prev => [response.data, ...prev]);
-
-            setShowModal(false);
-            setFormData({ name: '', description: '', color: '#FFFFFF' });
+            setShowCreateModal(false);
+            setProjectName('');
+            setProjectDescription('');
 
             alert('Проект успешно создан!');
 
         } catch (err) {
-            console.error('Ошибка создания проекта:', err);
-            alert(err.response?.data?.error || 'Ошибка создания проекта');
+            let errorMessage = err.response?.data?.error || 'Ошибка создания проекта';
+
+            if (err.response?.data?.details) {
+                const details = err.response.data.details;
+                if (typeof details === 'object') {
+                    errorMessage += '\n' + Object.entries(details)
+                        .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
+                        .join('\n');
+                } else {
+                    errorMessage += '\n' + details;
+                }
+            }
+
+            alert(errorMessage);
         }
     };
 
-    const handleUpdateProject = async (e) => {
-        e.preventDefault();
-
-        if (!editingProject) return;
-
-        try {
-            const response = await projectAPI.update_project(
-                editingProject.id,
-                formData
-            );
-
-            setProjects(prev => prev.map(project =>
-                project.id === editingProject.id ? response.data : project
-            ));
-
-            setShowModal(false);
-            setEditingProject(null);
-
-            alert('Проект успешно обновлен!');
-
-        } catch (err) {
-            console.error('Ошибка обновления проекта:', err);
-            alert(err.response?.data?.error || 'Ошибка обновления проекта');
-        }
-    };
-
-    const handleDeleteProject = async (projectId) => {
-        if (!window.confirm('Вы уверены, что хотите удалить этот проект?')) {
+    const handleDeleteProject = async (projectId, projectName) => {
+        if (!window.confirm(`Удалить проект "${projectName}"?`)) {
             return;
         }
 
         try {
             await projectAPI.delete_project(projectId);
-
-            setProjects(prev => prev.filter(project => project.id !== projectId));
-
-            alert('Проект успешно удален!');
+            setProjects(prev => prev.filter(p => p.id !== projectId));
+            alert('Проект удален');
 
         } catch (err) {
-            console.error('Ошибка удаления проекта:', err);
-            alert(err.response?.data?.error || 'Ошибка удаления проекта');
+            const errorMessage = err.response?.data?.error || 'Не удалось удалить проект';
+            alert(errorMessage);
         }
     };
 
-    const colorOptions = [
-        { value: '#FFFFFF', label: 'Белый' },
-        { value: '#000000', label: 'Черный' },
-        { value: '#FF0000', label: 'Красный' },
-        { value: '#00FF00', label: 'Зеленый' },
-        { value: '#0000FF', label: 'Синий' },
-        { value: '#FFFF00', label: 'Желтый' },
-        { value: '#FFA500', label: 'Оранжевый' },
-        { value: '#800080', label: 'Фиолетовый' },
-        { value: '#00FFFF', label: 'Бирюзовый' }
-    ];
-
-    if (loading && projects.length === 0) {
+    if (loading) {
         return (
-            <div className="loading">
-                Загрузка проектов...
+            <div className="project-list-container">
+                <div className="loading-screen">
+                    <div className="loading-spinner"></div>
+                    <p>Загрузка проектов...</p>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="projects-container">
-            {/* Заголовок и кнопка создания */}
-            <div className="projects-header">
-                <h1 className="projects-title">Мои проекты</h1>
+        <div className="project-list-container">
+            <div className="list-header">
+                <h1>Мои проекты</h1>
+                <div className="user-info">
+                    <span className="username">{user?.username}</span>
+                    <span className="user-role">({user?.role})</span>
+                </div>
                 <button
-                    onClick={handleCreateClick}
-                    className="btn btn-primary"
+                    onClick={() => setShowCreateModal(true)}
+                    className="btn create-btn"
                 >
-                    + Создать проект
+                    + Новый проект
                 </button>
             </div>
 
-            {/* Сообщение об ошибке */}
             {error && (
-                <div className="login-error" style={{ marginBottom: '1rem' }}>
-                    {error}
+                <div className="error-message">
+                    <p>{error}</p>
+                    <button
+                        onClick={fetchProjects}
+                        className="btn retry-btn"
+                    >
+                        Повторить попытку
+                    </button>
                 </div>
             )}
 
-            {/* Сетка проектов */}
-            {projects.length > 0 ? (
-                <div className="projects-grid">
-                    {projects.map(project => (
-                        <div
-                            key={project.id}
-                            className="project-card"
-                            style={{ borderLeftColor: project.color || '#3498db' }}
-                        >
-                            <div className="project-header">
-                                <div>
-                                    <h3 className="project-name">{project.name}</h3>
-                                    <div
-                                        className="project-color"
-                                        style={{ backgroundColor: project.color || '#FFFFFF' }}
-                                        title="Цвет проекта"
-                                    />
+            <div className="projects-list">
+                {projects.length === 0 ? (
+                    <div className="no-projects">
+                        {error ? (
+                            <div className="error-state">
+                                <p>Не удалось загрузить проекты</p>
+                                <button
+                                    onClick={fetchProjects}
+                                    className="btn retry-btn"
+                                >
+                                    Попробовать снова
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="empty-state">
+                                    <p>Проектов пока нет</p>
+                                    <p className="hint">Создайте свой первый проект</p>
                                 </div>
-                                <div className="project-actions">
-                                    <button
-                                        onClick={() => handleEditClick(project)}
-                                        className="btn btn-secondary"
-                                    >
-                                        Редактировать
-                                    </button>
-                                    {user.role === 'admin' && (
-                                        <button
-                                            onClick={() => handleDeleteProject(project.id)}
-                                            className="btn btn-danger"
-                                        >
-                                            Удалить
-                                        </button>
+                                <button
+                                    onClick={() => setShowCreateModal(true)}
+                                    className="btn create-btn"
+                                >
+                                    Создать первый проект
+                                </button>
+                            </>
+                        )}
+                    </div>
+                ) : (
+                    projects.map(project => (
+                        <div key={project.id} className="project-item">
+                            <div
+                                className="project-info"
+                                onClick={() => onSelectProject(project)}
+                            >
+                                <div className="project-title">
+                                    <div
+                                        className="color-dot"
+                                        style={{ backgroundColor: project.color || '#3498db' }}
+                                    />
+                                    <h3>{project.name}</h3>
+                                    {project.owner === user.id && (
+                                        <span className="owner-badge">Ваш проект</span>
                                     )}
                                 </div>
+
+                                {project.description && (
+                                    <p className="project-desc">{project.description}</p>
+                                )}
+
+                                <div className="project-meta">
+                                    <div className="meta-item">
+                                        <span className="meta-label">Создан:</span>
+                                        <span className="meta-value">
+                                            {project.creation_date
+                                                ? new Date(project.creation_date).toLocaleDateString('ru-RU')
+                                                : '—'
+                                            }
+                                        </span>
+                                    </div>
+
+                                    <div className="meta-item">
+                                        <span className="meta-label">ID:</span>
+                                        <span className="meta-value">{project.id}</span>
+                                    </div>
+                                </div>
                             </div>
 
-                            {project.description && (
-                                <p className="project-description">
-                                    {project.description}
-                                </p>
-                            )}
+                            <div className="project-actions">
+                                <button
+                                    onClick={() => onSelectProject(project)}
+                                    className="btn open-btn"
+                                >
+                                    Открыть
+                                </button>
 
-                            <div className="project-meta">
-                                <span className="project-owner">
-                                    Владелец: {project.owner || 'Не указан'}
-                                </span>
-                                <span>
-                                    Задач: {project.tasks_count || 0}
-                                </span>
+                                {(project.owner === user.id || user.role === 'admin') && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteProject(project.id, project.name);
+                                        }}
+                                        className="btn delete-btn"
+                                    >
+                                        Удалить
+                                    </button>
+                                )}
                             </div>
                         </div>
-                    ))}
-                </div>
-            ) : (
-                <div className="no-projects">
-                    <p>У вас еще нет проектов. Создайте первый проект!</p>
-                </div>
-            )}
+                    ))
+                )}
+            </div>
 
-            {/* Модальное окно создания/редактирования */}
-            {showModal && (
-                <div className="modal-overlay">
-                    <div className="modal">
+            {showCreateModal && (
+                <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2 className="modal-title">
-                                {modalType === 'create' ? 'Создать проект' : 'Редактировать проект'}
-                            </h2>
+                            <h2>Новый проект</h2>
                             <button
-                                onClick={() => setShowModal(false)}
                                 className="close-btn"
+                                onClick={() => setShowCreateModal(false)}
                             >
                                 ×
                             </button>
                         </div>
 
-                        <form onSubmit={modalType === 'create' ? handleCreateProject : handleUpdateProject}>
+                        <form onSubmit={handleCreateProject}>
                             <div className="form-group">
-                                <label>Название проекта:</label>
+                                <label>Название проекта *</label>
                                 <input
                                     type="text"
-                                    name="name"
-                                    value={formData.name}
-                                    onChange={handleInputChange}
+                                    value={projectName}
+                                    onChange={(e) => setProjectName(e.target.value)}
                                     required
-                                    className="form-input"
                                     placeholder="Введите название проекта"
                                 />
                             </div>
 
                             <div className="form-group">
-                                <label>Описание (необязательно):</label>
+                                <label>Описание</label>
                                 <textarea
-                                    name="description"
-                                    value={formData.description}
-                                    onChange={handleInputChange}
-                                    className="form-input"
-                                    placeholder="Введите описание проекта"
+                                    value={projectDescription}
+                                    onChange={(e) => setProjectDescription(e.target.value)}
+                                    placeholder="Описание проекта (необязательно)"
                                     rows="3"
                                 />
                             </div>
-                            <ProjectMembersList
-                                projectId={project.id}
-                                user={user}
-                            />
-                            <div className="form-group">
-                                <label>Цвет проекта:</label>
-                                <div className="color-picker">
-                                    {colorOptions.map(color => (
-                                        <div
-                                            key={color.value}
-                                            className={`color-option ${formData.color === color.value ? 'selected' : ''}`}
-                                            style={{ backgroundColor: color.value }}
-                                            onClick={() => handleColorSelect(color.value)}
-                                            title={color.label}
-                                        />
-                                    ))}
-                                </div>
-                                <small>Выбран: {colorOptions.find(c => c.value === formData.color)?.label}</small>
-                            </div>
 
-                            <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                >
-                                    {modalType === 'create' ? 'Создать' : 'Сохранить'}
+                            <div className="modal-buttons">
+                                <button type="submit" className="btn primary-btn">
+                                    Создать проект
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="btn btn-secondary"
+                                    onClick={() => setShowCreateModal(false)}
+                                    className="btn secondary-btn"
                                 >
                                     Отмена
                                 </button>
