@@ -1,35 +1,19 @@
-version: '3.8'
-
 services:
-  db:
-    image: postgres:15-alpine
+  taskmanager:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: taskmanager-prod
+    ports:
+      - "80:5000"  # Доступ на 80 порту
     environment:
-      POSTGRES_DB: project_management
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:////app/backend/data/production.db
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-jwt-secret-key-change}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-  backend:
-    build: ./backend
-    environment:
-      DATABASE_URL: postgresql://admin:admin123@db:5432/project_management
-      JWT_SECRET_KEY: your_secret_key_here
-    ports:
-      - "5000:5000"
-    depends_on:
-      - db
-
-  frontend:
-    build: ./frontend
-    environment:
-      REACT_APP_API_URL: http://localhost:5000
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
+      - taskmanager-data:/app/backend/data
+    restart: always
 
 volumes:
-  postgres_data:
+  taskmanager-data:

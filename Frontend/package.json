@@ -1,12 +1,11 @@
 {
-  "name": "task-manager-frontend",
+  "name": "taskmanager-frontend",
   "version": "1.0.0",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "axios": "^1.4.0"
+    "axios": "^1.6.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -14,9 +13,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
-  "proxy": "http://backend:5812",
   "devDependencies": {
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11"
+    "react-scripts": "5.0.1"
   },
   "browserslist": {
     "production": [

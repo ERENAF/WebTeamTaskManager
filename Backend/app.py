@@ -24,7 +24,16 @@ app.register_blueprint(tasks_bp, url_prefix='/api/tasks')
 app.register_blueprint(comments_bp, url_prefix='/api')
 app.register_blueprint(system_bp, url_prefix='/api')
 
+from flask import send_from_directory
+import os
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_frontend(path):
+    if path and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    return send_from_directory(app.static_folder, 'index.html')
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # В production используем gunicorn, но для теста оставим так
+    app.run(host='0.0.0.0', port=5000, debug=False)
