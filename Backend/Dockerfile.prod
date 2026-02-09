@@ -1,0 +1,59 @@
+FROM python:3.14-slim as backend
+
+WORKDIR /app
+
+# Копируем и устанавливаем зависимости бэкенда
+COPY Backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем код бэкенда
+COPY Backend/ .
+
+# Создаем папку для БД
+RUN mkdir -p /app/instance
+
+# Создаем папку для статики фронтенда
+RUN mkdir -p /app/static
+
+# Сборка фронтенда
+FROM node:20-alpine as frontend-builder
+
+WORKDIR /app
+
+# Копируем и устанавливаем зависимости фронтенда
+COPY Frontend/package.json Frontend/package-lock.json ./
+RUN npm install
+
+# Копируем и собираем фронтенд
+COPY Frontend/ .
+RUN npm run build
+
+# Финальный образ
+FROM python:3.14-slim
+
+WORKDIR /app
+
+# Копируем Python зависимости
+COPY --from=backend /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=backend /usr/local/bin /usr/local/bin
+
+# Копируем код бэкенда
+COPY Backend/ .
+
+# Копируем собранный фронтенд
+COPY --from=frontend-builder /app/build /app/static
+
+# Создаем необходимые папки
+RUN mkdir -p /app/instance && chmod 777 /app/instance
+
+# Устанавливаем переменные окружения
+ENV FLASK_ENV=production
+ENV DATABASE_URL=sqlite:////app/instance/prod.db
+ENV SECRET_KEY=your-production-secret-key-change-this
+ENV STATIC_FOLDER=/app/static
+
+# Открываем порт
+EXPOSE 5000
+
+# Команда запуска
+CMD ["python", "app.py"]
